@@ -1,0 +1,11 @@
+{
+  "source": "bizyair",
+  "web_app_id": 46445,
+  "field_mapping": {
+    "prompt": "6:CLIPTextEncode.text",
+    "negative_prompt": "7:CLIPTextEncode.text",
+    "width": "13:EmptySD3LatentImage.width",
+    "height": "13:EmptySD3LatentImage.height",
+    "batch_size": "13:EmptySD3LatentImage.batch_size"
+  }
+}

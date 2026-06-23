@@ -1,0 +1,18 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - heading [level=1] [ref=e4]:
+        - link [ref=e5] [cursor=pointer]:
+          - /url: /
+      - generic [ref=e9] [cursor=pointer]: 立即登录
+    - status "模型详情加载中" [ref=e16]
+    - generic [ref=e67]:
+      - generic:
+        - generic: 意见反馈
+      - button "help" [ref=e68] [cursor=pointer]:
+        - img "help" [ref=e69]
+      - button "关闭" [ref=e70] [cursor=pointer]:
+        - img [ref=e71]
+  - region "Notifications (F8)":
+    - list
+  - alert [ref=e74]

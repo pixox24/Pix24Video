@@ -1,0 +1,9 @@
+{
+  "source": "bizyair",
+  "api_type": "modelzoo",
+  "endpoint": "bza-image-o2-official/text-to-image",
+  "display_name": "BizyAir 通用图片O.2 文生图",
+  "defaults": {
+    "quality": "medium"
+  }
+}
