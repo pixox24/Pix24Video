@@ -89,6 +89,7 @@ class ComfyUIConfig(BaseModel):
     runninghub_concurrent_limit: int = Field(default=1, ge=1, le=10, description="RunningHub concurrent execution limit (1-10)")
     runninghub_instance_type: Optional[str] = Field(default=None, description="RunningHub instance type (optional, set to 'plus' for 48GB VRAM)")
     bizyair_api_key: Optional[str] = Field(default=None, description="BizyAir API Key (optional)")
+    v1_api_key: Optional[str] = Field(default=None, description="65535.space / OpenAI-compatible Image API Key (optional)")
     tts: TTSSubConfig = Field(default_factory=TTSSubConfig, description="TTS-specific configuration")
     image: ImageSubConfig = Field(default_factory=ImageSubConfig, description="Image-specific configuration")
     video: VideoSubConfig = Field(default_factory=VideoSubConfig, description="Video-specific configuration")

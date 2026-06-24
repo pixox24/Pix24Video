@@ -241,6 +241,10 @@ class MediaService(ComfyBaseService):
             if workflow_info["source"] == "bizyair":
                 return await self._call_bizyair_api(workflow_info, workflow_params)
             
+            # v1 OpenAI-compatible direct API (no ComfyUI needed)
+            if workflow_info["source"] == "v1":
+                return await self._call_v1_api(workflow_info, workflow_params)
+            
             # Get shared ComfyKit instance (lazy initialization + config hot-reload)
             kit = await self.core._get_or_create_comfykit()
             
@@ -444,3 +448,108 @@ class MediaService(ComfyBaseService):
 
         timeout_seconds = self.BIZYAIR_MAX_POLL_ATTEMPTS * self.BIZYAIR_POLL_INTERVAL_SECONDS
         raise TimeoutError(f"BizyAir task {request_id} timed out after {timeout_seconds}s")
+
+    # ========== v1 OpenAI-compatible Image API ==========
+
+    V1_POLL_INTERVAL_SECONDS = 3
+    V1_MAX_POLL_ATTEMPTS = 200
+
+    async def _call_v1_api(self, workflow_info: dict, workflow_params: dict) -> MediaResult:
+        v1_api_key = self._get_v1_api_key()
+        base_url = workflow_info.get("base_url", "https://img-cn.65535.space")
+        model_name = workflow_info.get("model", "gpt-image-2")
+
+        body: dict[str, Any] = {
+            "model": model_name,
+            "prompt": workflow_params.get("prompt", ""),
+            "n": 1,
+            "response_format": "url",
+        }
+
+        width = workflow_params.get("width")
+        height = workflow_params.get("height")
+        if width and height:
+            body["size"] = f"{int(width)}x{int(height)}"
+
+        submit_url = f"{base_url}/v1/images/generations"
+        headers = {
+            "Authorization": f"Bearer {v1_api_key}",
+            "Content-Type": "application/json",
+            "X-Async-Mode": "true",
+        }
+
+        logger.info(f"Submitting v1 image task: model={model_name}, size={body.get('size', 'default')}")
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(submit_url, headers=headers, json=body)
+            response.raise_for_status()
+            result = response.json()
+
+        logger.debug(f"v1 submit response: {result}")
+
+        job_id = result.get("job_id")
+        if not job_id:
+            raise RuntimeError(f"v1 API did not return job_id. Response: {result}")
+
+        status = result.get("status", "pending")
+        logger.info(f"v1 task submitted: job_id={job_id}, status={status}")
+
+        return await self._poll_v1_result(job_id, base_url, v1_api_key)
+
+    def _get_v1_api_key(self) -> str:
+        v1_api_key = self.global_config.get("v1_api_key") or os.getenv("V1_API_KEY")
+        if not v1_api_key or not str(v1_api_key).strip():
+            raise ValueError(
+                "v1 (65535.space) API key not configured. "
+                "Please set 'v1_api_key' in config.yaml under 'comfyui' section "
+                "or set the V1_API_KEY environment variable."
+            )
+        return str(v1_api_key).strip()
+
+    async def _poll_v1_result(self, job_id: str, base_url: str, api_key: str) -> MediaResult:
+        headers = {"Authorization": f"Bearer {api_key}"}
+        poll_url = f"{base_url}/v1/images/async-generations/{job_id}"
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for attempt in range(self.V1_MAX_POLL_ATTEMPTS):
+                if attempt > 0:
+                    await asyncio.sleep(self.V1_POLL_INTERVAL_SECONDS)
+
+                resp = await client.get(poll_url, headers=headers)
+                resp.raise_for_status()
+                detail = resp.json()
+
+                logger.debug(f"v1 poll [{attempt+1}]: {detail}")
+
+                if detail.get("code") != 0:
+                    msg = detail.get("message", "Unknown error")
+                    raise RuntimeError(f"v1 API error: code={detail.get('code')}, msg={msg}")
+
+                data = detail.get("data", {})
+                status = data.get("status", "Unknown")
+
+                if status == "done":
+                    result_urls = data.get("result_urls") or []
+                    if not result_urls:
+                        raise RuntimeError("v1 task done but no result_urls returned")
+                    image_url = result_urls[0]
+                    logger.info(f"Generated v1 image: {image_url}")
+                    return MediaResult(media_type="image", url=image_url)
+
+                if status == "failed":
+                    error_code = data.get("error_code", "")
+                    error_msg = data.get("error_message", "Unknown error")
+                    raise RuntimeError(f"v1 task {job_id} failed: {error_code} - {error_msg}")
+
+                if status not in ("pending", "running"):
+                    logger.warning(
+                        f"v1 task {job_id}: unknown status={status}, continuing to poll"
+                    )
+                    continue
+
+                if attempt > 0 and attempt % 10 == 0:
+                    elapsed = attempt * self.V1_POLL_INTERVAL_SECONDS
+                    logger.info(f"v1 task {job_id}: still {status} after {elapsed}s")
+
+        timeout_seconds = self.V1_MAX_POLL_ATTEMPTS * self.V1_POLL_INTERVAL_SECONDS
+        raise TimeoutError(f"v1 task {job_id} timed out after {timeout_seconds}s")

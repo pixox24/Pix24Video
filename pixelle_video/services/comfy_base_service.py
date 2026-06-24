@@ -178,6 +178,10 @@ class ComfyBaseService:
                 workflow_info["web_app_id"] = content["web_app_id"]
             if "field_mapping" in content:
                 workflow_info["field_mapping"] = content["field_mapping"]
+            if "model" in content:
+                workflow_info["model"] = content["model"]
+            if "base_url" in content:
+                workflow_info["base_url"] = content["base_url"]
         
         return workflow_info
     
